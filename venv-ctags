@@ -1,0 +1,76 @@
+#!/bin/bash
+# original credits go to mgedmin
+#
+# Build a vim tags file for all the Python packages in the virtualenv path
+# We look for a python interpreter in bin/python and use its path.
+#
+# Original published at https://gist.github.com/mgedmin/5152189
+
+progname=${0##*/}
+
+die() {
+    echo "$progname: $@" 1>&2
+    exit 1
+}
+
+verbose=0
+dry_run=0
+python=""
+
+for arg; do
+    case "$arg" in
+        -h|--help)
+            echo "Usage: $progname [-v|--verbose] [-n|--dry-run] [python-to-use-to-get-sys-path]"
+            exit 0
+            ;;
+        -v|--verbose)
+            verbose=1
+            ;;
+        -n|--dry-run)
+            dry_run=1
+            ;;
+        -*)
+            die "Unexpected argument: $arg"
+            ;;
+        *)
+            if [ -z "$python" ]; then
+                python=$arg
+            else
+                die "Unexpected argument: $arg"
+            fi
+            ;;
+    esac
+done
+
+if [ -n "$python" ] && [ -x "$python" ]; then
+    python=${python}
+elif [ -x bin/python ]; then
+    python=bin/python
+else
+    die "I expect to find a bin/python somewhere"
+fi
+
+paths=$($python -c "
+import os, sys
+d = set(p for p in sys.path
+        if os.path.isdir(p) and
+           not os.path.isdir(os.path.join(p, 'dist-packages')) and
+           not '/local/' in p
+        )
+for p in sys.path:
+    if os.path.isdir(os.path.join(p, 'dist-packages')):
+        d.add(os.path.join(p, '*.py'))
+        for s in os.listdir(p):
+            if os.path.exists(os.path.join(p, s, '__init__.py')):
+                d.add(os.path.join(p, s))
+print('\\n'.join(sorted(d)))
+")
+
+test -n "$paths" || die "The python path is empty?  Confused."
+
+test $verbose -ne 0 && echo "$paths"
+
+if [ $dry_run -eq 0 ]; then
+    ctags-exuberant -R -f .tags.new $paths && mv .tags.new tags || rm .tags.new
+    ctags-exuberant -e -R -f .TAGS.new $paths && mv .TAGS.new TAGS || rm .TAGS.new
+fi
