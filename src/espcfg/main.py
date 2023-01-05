@@ -1,13 +1,12 @@
 import click
+import csv
 import logging
 import os
 import requests
 
+from bs4 import BeautifulSoup
 from collections import defaultdict
 from dataclasses import dataclass
-
-from bs4 import BeautifulSoup
-
 from espcfg.utils import setupLogging
 from espcfg.utils import install_hook
 from urllib.error import URLError
@@ -43,16 +42,11 @@ def readWebTable(url):
     return table
 
 
-def readIslands(table):
-    # find the islands
-    # return data
-    islands = []
-    for ridx, row in enumerate(table):
-        for cidx, cell in enumerate(row):
-            if cell == ISLAND_CORNER:
-                island = loadIsland(table, ridx, cidx)
-                islands.append(island)
-    return islands
+def readCSV(fname):
+    with open(fname, 'r') as csv_file:
+        csv_reader = csv.reader(csv_file)
+        table = [row for row in csv_reader]
+    return table
 
 
 @dataclass
@@ -70,18 +64,17 @@ class Island:
     data: list
 
 
-def getIslandRow(table, ridx, cidx, previous=None):
-    page = table[ridx][cidx]
-    url = table[ridx][cidx + 1]
-    control = table[ridx][cidx + 2]
-    value = table[ridx][cidx + 3]
-    if previous is not None:
-        page = page or previous.page
-        url = url or previous.url
-        # control = control or previous.control
-        # value = value or previous.value
-    row = Row(page, url, control, value)
-    return row
+def readIslands(table):
+    # find the islands
+    # be lazy and add an empty row instead of index checking
+    table.append(['']*len(table[-1]))
+    islands = []
+    for ridx, row in enumerate(table):
+        for cidx, cell in enumerate(row):
+            if cell == ISLAND_CORNER:
+                island = loadIsland(table, ridx, cidx)
+                islands.append(island)
+    return islands
 
 
 def loadIsland(table, ridx, cidx):
@@ -121,6 +114,20 @@ def loadIsland(table, ridx, cidx):
 
     island = Island(units=units, data=data, urls=urls)
     return island
+
+
+def getIslandRow(table, ridx, cidx, previous=None):
+    page = table[ridx][cidx]
+    url = table[ridx][cidx + 1]
+    control = table[ridx][cidx + 2]
+    value = table[ridx][cidx + 3]
+    if previous is not None:
+        page = page or previous.page
+        url = url or previous.url
+        # control = control or previous.control
+        # value = value or previous.value
+    row = Row(page, url, control, value)
+    return row
 
 
 class Control:
@@ -267,12 +274,12 @@ class Processor:
 
 
 @click.command()
-@click.argument("url")
+@click.argument("source")
 @click.option("--quiet", "-q", default=False, is_flag=True)
 @click.option("--verbose", "-v", default=False, is_flag=True)
 @click.option("--dryrun", "-d", default=False, is_flag=True)
 @click.option("--failfast", "-f", default=False, is_flag=True)
-def main(url, quiet, verbose, dryrun, failfast):
+def main(source, quiet, verbose, dryrun, failfast):
     os.chdir(HOME)
 
     level = logging.INFO
@@ -284,7 +291,10 @@ def main(url, quiet, verbose, dryrun, failfast):
     install_hook()
     setupLogging("log/main.log", stdout=True, level=level)
 
-    data = readWebTable(url)
+    if source.lower().startswith('http'):
+        data = readWebTable(source)
+    elif source.lower().endswith('.csv'):
+        data = readCSV(source)
     islands = readIslands(data)
     if dryrun:
         LOG.info("-----------------------------")
