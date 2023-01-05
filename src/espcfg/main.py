@@ -12,8 +12,6 @@ from espcfg.utils import install_hook
 from urllib.error import URLError
 from zope.testbrowser.browser import Browser
 
-
-HERE = os.path.dirname(__file__)
 HOME = __file__.rsplit("src", 1)[0]
 
 ISLAND_CORNER = "units IP/addr"
@@ -21,16 +19,29 @@ ISLAND_CORNER = "units IP/addr"
 LOG = logging.getLogger(__name__)
 
 
+@dataclass
+class Row:
+    url: str
+    control: str
+    value: str
+
+
+@dataclass
+class Island:
+    units: list
+    urls: dict
+    data: list
+
+
 def readWebTable(url):
     r = requests.get(url)
     if r.status_code != 200:
-        LOG.LOG.debug(f"Request {url} failed: {r.status_code}")
+        LOG.error(f"Request {url} failed: {r.status_code}")
         raise requests.exceptions.RequestException(response=r)
 
     soup = BeautifulSoup(r.text, features="lxml")
     tbody = soup.find("table").find("tbody")
 
-    # load it all
     table = []
     for table_row in tbody.findAll("tr"):
         columns = table_row.findAll("td")
@@ -47,20 +58,6 @@ def readCSV(fname):
         csv_reader = csv.reader(csv_file)
         table = [row for row in csv_reader]
     return table
-
-
-@dataclass
-class Row:
-    url: str
-    control: str
-    value: str
-
-
-@dataclass
-class Island:
-    units: list
-    urls: dict
-    data: list
 
 
 def readIslands(table):
@@ -100,6 +97,7 @@ def loadIsland(table, ridx, cidx):
     while True:
         row = getIslandRow(table, ridx + roffset, cidx, previous=prevRow)
         if not row.control or not row.value or row.url == ISLAND_CORNER:
+            # an empty row or the next island header is the bottom of the island
             break
 
         if not row.control.startswith("#"):
@@ -120,8 +118,6 @@ def getIslandRow(table, ridx, cidx, previous=None):
     value = table[ridx][cidx + 2]
     if previous is not None:
         url = url or previous.url
-        # control = control or previous.control
-        # value = value or previous.value
     row = Row(url, control, value)
     return row
 
@@ -188,6 +184,8 @@ class Combo(Control):
         return prevValue != newValue
 
     def needPost(self):
+        # some controls need to submit the form on change
+        # the browser does this with javascript, we need to dig
         soup = BeautifulSoup(self.browserControl.browser.contents, features="lxml")
         elem = soup.find("select", {"name": self.browserControl.name})
         return "onchange" in elem.attrs
@@ -195,7 +193,7 @@ class Combo(Control):
 
 class Password(Control):
     def changed(self, newValue):
-        # well, ESP newer submits passwords
+        # well, ESP never submits passwords
         return True
 
 
