@@ -43,7 +43,7 @@ def readWebTable(url):
 
 
 def readCSV(fname):
-    with open(fname, 'r') as csv_file:
+    with open(fname, "r") as csv_file:
         csv_reader = csv.reader(csv_file)
         table = [row for row in csv_reader]
     return table
@@ -67,7 +67,7 @@ class Island:
 def readIslands(table):
     # find the islands
     # be lazy and add an empty row instead of index checking
-    table.append(['']*len(table[-1]))
+    table.append([""] * len(table[-1]))
     islands = []
     for ridx, row in enumerate(table):
         for cidx, cell in enumerate(row):
@@ -218,9 +218,11 @@ class Processor:
     dryRun = False
     failFast = False
 
-    def process(self, data, dryRun=False, failFast=False):
+    def __init__(self, dryRun=False, failFast=False):
         self.dryRun = dryRun
         self.failFast = failFast
+
+    def process(self, data):
         for island in data:
             self.processIsland(island)
 
@@ -231,22 +233,23 @@ class Processor:
     def processUnit(self, unit, island):
         browser = Browser()
         try:
-            browser.open(f"http://{unit}")
-        except URLError as ex:
-            LOG.error(ex)
+            unitUrl = f"http://{unit}"
+            browser.open(unitUrl)
+        except (URLError, OSError) as ex:
+            LOG.error("%s %s", unitUrl, ex)
             if self.failFast:
-                return
-            raise
+                raise
+            return
 
         for url, rows in island.urls.items():
             pageUrl = f"http://{unit}{url}"
             try:
                 browser.open(pageUrl)
-            except URLError as ex:
-                LOG.error(ex)
+            except (URLError, OSError) as ex:
+                LOG.error("%s %s", pageUrl, ex)
                 if self.failFast:
-                    return
-                raise
+                    raise
+                return
             LOG.info(f"Loaded {pageUrl}")
             form = browser.getForm()
             changed = False
@@ -272,14 +275,47 @@ class Processor:
             else:
                 LOG.info(f"{pageUrl} no changes")
 
+    def precheck(self, islands):
+        units = set()
+        for island in islands:
+            for unit in island.units:
+                units.add(unit)
+
+        failed = []
+        browser = Browser()
+        for unit in sorted(units):
+            try:
+                unitUrl = f"http://{unit}"
+                LOG.info("Checking %s", unitUrl)
+                browser.open(unitUrl)
+            except (URLError, OSError) as ex:
+                LOG.error("%s %s", unitUrl, ex)
+                failed.append(unit)
+
+        if self.failFast:
+            raise SystemExit(1)
+
 
 @click.command()
 @click.argument("source")
 @click.option("--quiet", "-q", default=False, is_flag=True)
 @click.option("--verbose", "-v", default=False, is_flag=True)
-@click.option("--dryrun", "-d", default=False, is_flag=True)
-@click.option("--failfast", "-f", default=False, is_flag=True)
-def main(source, quiet, verbose, dryrun, failfast):
+@click.option("--dryrun", "-d", default=False, is_flag=True, help="Make no changes")
+@click.option(
+    "--failfast",
+    "-f",
+    default=False,
+    is_flag=True,
+    help="fail/exit on first failure, otherwise move on the next unit",
+)
+@click.option(
+    "--precheck",
+    "-p",
+    default=False,
+    is_flag=True,
+    help="Connect all mentioned units before updating",
+)
+def main(source, quiet, verbose, dryrun, failfast, precheck):
     os.chdir(HOME)
 
     level = logging.INFO
@@ -291,13 +327,16 @@ def main(source, quiet, verbose, dryrun, failfast):
     install_hook()
     setupLogging("log/main.log", stdout=True, level=level)
 
-    if source.lower().startswith('http'):
+    if source.lower().startswith("http"):
         data = readWebTable(source)
-    elif source.lower().endswith('.csv'):
+    elif source.lower().endswith(".csv"):
         data = readCSV(source)
     islands = readIslands(data)
     if dryrun:
         LOG.info("-----------------------------")
         LOG.info("-- DRY RUN ------------------")
         LOG.info("-----------------------------")
-    Processor().process(islands, dryRun=dryrun, failFast=failfast)
+    p = Processor(dryRun=dryrun, failFast=failfast)
+    if precheck:
+        p.precheck(islands)
+    p.process(islands)
