@@ -51,7 +51,6 @@ def readCSV(fname):
 
 @dataclass
 class Row:
-    page: str
     url: str
     control: str
     value: str
@@ -84,14 +83,13 @@ def loadIsland(table, ridx, cidx):
     units = []
     while True:
         unit = table[ridx + roffset][cidx]
-        if unit == "page" and table[ridx + roffset][cidx + 1] == "URL":
+        if unit == "URL" and table[ridx + roffset][cidx + 1] == "control name":
             break
         units.append(unit)
         roffset += 1
 
     header = getIslandRow(table, ridx + roffset, cidx)
     roffset += 1
-    assert header.page == "page"
     assert header.url == "URL"
     assert header.control == "control name"
     assert header.value == "value"
@@ -101,7 +99,7 @@ def loadIsland(table, ridx, cidx):
     urls = defaultdict(list)
     while True:
         row = getIslandRow(table, ridx + roffset, cidx, previous=prevRow)
-        if not row.control or not row.value or row.page == ISLAND_CORNER:
+        if not row.control or not row.value or row.url == ISLAND_CORNER:
             break
 
         if not row.control.startswith("#"):
@@ -117,16 +115,14 @@ def loadIsland(table, ridx, cidx):
 
 
 def getIslandRow(table, ridx, cidx, previous=None):
-    page = table[ridx][cidx]
-    url = table[ridx][cidx + 1]
-    control = table[ridx][cidx + 2]
-    value = table[ridx][cidx + 3]
+    url = table[ridx][cidx]
+    control = table[ridx][cidx + 1]
+    value = table[ridx][cidx + 2]
     if previous is not None:
-        page = page or previous.page
         url = url or previous.url
         # control = control or previous.control
         # value = value or previous.value
-    row = Row(page, url, control, value)
+    row = Row(url, control, value)
     return row
 
 
@@ -306,7 +302,7 @@ class Processor:
     "-f",
     default=False,
     is_flag=True,
-    help="fail/exit on first failure, otherwise move on the next unit",
+    help="Fail/exit on first failure, otherwise move on the next unit",
 )
 @click.option(
     "--precheck",
