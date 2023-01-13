@@ -17,7 +17,8 @@ bin/pip: setup.py requirements.txt
 	mkdir -p bin
 
 	ln -sf $(PWD)/venv/bin/pip ./bin/pip
-	ln -sf $(PWD)/venv/bin/main ./bin/main
+	ln -sf $(PWD)/venv/bin/config ./bin/config
+	ln -sf $(PWD)/venv/bin/discover ./bin/discover
 
 	mkdir -p log
 	mkdir -p var

@@ -28,7 +28,8 @@ setup(
     install_requires=REQUIREMENTS,
     entry_points={
         "console_scripts": [
-            "main = espcfg.main:main",
+            "config = espcfg.main:config",
+            "discover = espcfg.main:discover",
         ]
     },
 )

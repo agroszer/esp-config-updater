@@ -1,8 +1,11 @@
 import click
 import csv
+import json
 import logging
 import os
+import queue
 import requests
+import threading
 
 from bs4 import BeautifulSoup
 from collections import defaultdict
@@ -13,6 +16,7 @@ from urllib.error import URLError
 from zope.testbrowser.browser import Browser
 
 HOME = __file__.rsplit("src", 1)[0]
+VAR = os.path.join(HOME, "var")
 
 ISLAND_CORNER = "units IP/addr"
 
@@ -309,7 +313,7 @@ class Processor:
     is_flag=True,
     help="Connect all mentioned units before updating",
 )
-def main(source, quiet, verbose, dryrun, failfast, precheck):
+def config(source, quiet, verbose, dryrun, failfast, precheck):
     os.chdir(HOME)
 
     level = logging.INFO
@@ -319,7 +323,7 @@ def main(source, quiet, verbose, dryrun, failfast, precheck):
         level = logging.DEBUG
 
     install_hook()
-    setupLogging("log/main.log", stdout=True, level=level)
+    setupLogging("log/config.log", stdout=True, level=level)
 
     if source.lower().startswith("http"):
         data = readWebTable(source)
@@ -334,3 +338,113 @@ def main(source, quiet, verbose, dryrun, failfast, precheck):
     if precheck:
         p.precheck(islands)
     p.process(islands)
+
+
+class Discovery:
+    def _getUnitName(self, data):
+        try:
+            unitName = data["System"]["Unit Name"]
+        except KeyError:
+            pass
+        try:
+            unitIP = data["WiFi"]["IP Address"]
+        except KeyError:
+            pass
+        unitName = unitName or unitIP
+        unitName = unitName.replace(".", "_")
+        return unitName
+
+    def worker(self, unitip, collector, timeout=1):
+        url = f"http://{unitip}/json"
+        LOG.debug("Trying %s", url)
+        try:
+            # well, attack directly, any ping+whatnot would just add more time
+            r = requests.get(url, timeout=timeout)
+        except Exception as exc:
+            LOG.debug("%s request error %s", url, exc)
+            return
+        if r.status_code != 200:
+            LOG.debug("%s request response %s", url, r.status_code)
+            return
+        try:
+            data = r.json()
+        except Exception as exc:
+            LOG.debug("%s JSON conversion error %s", url, exc)
+            return
+        collector.put(data)
+        unitName = self._getUnitName(data)
+        varFile = os.path.join(VAR, f"{unitName}.json")
+        with open(varFile, "w") as of:
+            of.write(r.text)
+
+    def _loadCollector(self, collector):
+        units = {}
+        while True:
+            try:
+                unit = collector.get_nowait()
+                unitName = self._getUnitName(unit)
+                units[unitName] = unit
+            except queue.Empty:
+                break
+        return units
+
+    def discoverUnits(self, iprange, timeout=1):
+        LOG.info("Running discovery on %s", iprange)
+        parts = iprange.split(".")
+        base = ".".join(parts[0:3])
+
+        collector = queue.Queue()
+        threads = []
+
+        for last in range(1, 254):
+            ip = f"{base}.{last}"
+            thr = threading.Thread(target=self.worker, args=(ip, collector, timeout))
+            threads.append(thr)
+            thr.start()
+
+        for thr in threads:
+            thr.join()
+
+        units = self._loadCollector(collector)
+        LOG.info("Discovered %s units", len(units))
+
+        # collect nodes from units, looks like they don't always respond directly
+        for unit in units.values():
+            for unode in unit["nodes"]:
+                if unode["name"] not in units:
+                    self.worker(unode["ip"], collector, timeout=timeout * 3)
+
+        extra = self._loadCollector(collector)
+        if extra:
+            LOG.info("Discovered %s units via unit nodes", len(extra))
+            units.update(extra)
+
+        return units
+
+
+@click.command()
+@click.argument("iprange")
+# An IP range given as 192.168.0.1, the whole 192.168.0.1/24 will be scanned
+@click.option("--quiet", "-q", default=False, is_flag=True)
+@click.option("--verbose", "-v", default=False, is_flag=True)
+@click.option("--timeout", "-t", default=1, type=int)
+def discover(iprange, quiet, verbose, timeout):
+    level = logging.INFO
+    if quiet:
+        level = logging.ERROR
+    elif verbose:
+        level = logging.DEBUG
+
+    install_hook()
+    setupLogging("log/discover.log", stdout=True, level=level)
+
+    units = Discovery().discoverUnits(iprange, timeout=timeout)
+    ulist = []
+    for unitName, unit in sorted(units.items()):
+        unitIP = unit["WiFi"]["IP Address"]
+        ulist.append([unitName, unitIP])
+        LOG.info("%s %s", unitName, unitIP)
+
+    varFile = os.path.join(VAR, f"units.json")
+    with open(varFile, "w") as of:
+        json.dump(ulist, of, indent=4)
