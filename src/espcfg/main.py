@@ -388,16 +388,11 @@ class Discovery:
                 break
         return units
 
-    def discoverUnits(self, iprange, timeout=1):
-        LOG.info("Running discovery on %s", iprange)
-        parts = iprange.split(".")
-        base = ".".join(parts[0:3])
-
+    def discoverUnitsInThread(self, iplist, timeout=1):
         collector = queue.Queue()
         threads = []
 
-        for last in range(1, 254):
-            ip = f"{base}.{last}"
+        for ip in iplist:
             thr = threading.Thread(target=self.worker, args=(ip, collector, timeout))
             threads.append(thr)
             thr.start()
@@ -406,15 +401,25 @@ class Discovery:
             thr.join()
 
         units = self._loadCollector(collector)
+        return units
+
+    def discoverUnits(self, iprange, timeout=1):
+        LOG.info("Running discovery on %s", iprange)
+        parts = iprange.split(".")
+        base = ".".join(parts[0:3])
+
+        iplist = [f"{base}.{last}" for last in range(1, 254)]
+        units = self.discoverUnitsInThread(iplist)
         LOG.info("Discovered %s units", len(units))
 
         # collect nodes from units, looks like they don't always respond directly
+        iplist = []
         for unit in units.values():
             for unode in unit["nodes"]:
                 if unode["name"] not in units:
-                    self.worker(unode["ip"], collector, timeout=timeout * 3)
+                    iplist.append(unode["ip"])
 
-        extra = self._loadCollector(collector)
+        extra = self.discoverUnitsInThread(iplist, timeout=timeout * 3)
         if extra:
             LOG.info("Discovered %s units via unit nodes", len(extra))
             units.update(extra)
