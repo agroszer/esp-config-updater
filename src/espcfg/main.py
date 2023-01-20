@@ -17,6 +17,7 @@ from zope.testbrowser.browser import Browser
 
 HOME = __file__.rsplit("src", 1)[0]
 VAR = os.path.join(HOME, "var")
+UNITS_FNAME = os.path.join(VAR, "units.json")
 
 ISLAND_CORNER = "units IP/addr"
 
@@ -215,10 +216,12 @@ CTRL_MAPPING = {
 class Processor:
     dryRun = False
     failFast = False
+    name2ip = None
 
     def __init__(self, dryRun=False, failFast=False):
         self.dryRun = dryRun
         self.failFast = failFast
+        self.name2ip = {}
 
     def process(self, data):
         for island in data:
@@ -230,6 +233,8 @@ class Processor:
 
     def processUnit(self, unit, island):
         browser = Browser()
+        # optional name -> IP lookup
+        unit = self.name2ip.get(unit, unit)
         try:
             unitUrl = f"http://{unit}"
             browser.open(unitUrl)
@@ -282,6 +287,7 @@ class Processor:
         failed = []
         browser = Browser()
         for unit in sorted(units):
+            unit = self.name2ip.get(unit, unit)
             try:
                 unitUrl = f"http://{unit}"
                 LOG.info("Checking %s", unitUrl)
@@ -292,6 +298,12 @@ class Processor:
 
         if self.failFast:
             raise SystemExit(1)
+    
+    def loadUnits(self):
+        if os.path.exists(UNITS_FNAME):
+            with open(UNITS_FNAME, "r") as inf:
+                ulist = json.load(inf)
+                self.name2ip = {u[0]: u[1] for u in ulist}
 
 
 @click.command()
@@ -335,6 +347,7 @@ def config(source, quiet, verbose, dryrun, failfast, precheck):
         LOG.info("-- DRY RUN ------------------")
         LOG.info("-----------------------------")
     p = Processor(dryRun=dryrun, failFast=failfast)
+    p.loadUnits()
     if precheck:
         p.precheck(islands)
     p.process(islands)
@@ -450,6 +463,5 @@ def discover(iprange, quiet, verbose, timeout):
         ulist.append([unitName, unitIP])
         LOG.info("%s %s", unitName, unitIP)
 
-    varFile = os.path.join(VAR, f"units.json")
-    with open(varFile, "w") as of:
+    with open(UNITS_FNAME, "w") as of:
         json.dump(ulist, of, indent=4)
