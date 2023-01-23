@@ -232,6 +232,7 @@ class Processor:
             self.processUnit(unit, island)
 
     def processUnit(self, unit, island):
+        LOG.info("Processing %s", unit)
         browser = Browser()
         # optional name -> IP lookup
         unit = self.name2ip.get(unit, unit)
