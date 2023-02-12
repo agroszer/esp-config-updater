@@ -150,6 +150,17 @@ class TextBox(Control):
     pass
 
 
+class HiddenControl(Control):
+    def write(self, value):
+        # just ignore writes
+        pass
+
+    def changed(self, newValue):
+        # must not change hidden controls
+        # usually those are previously selected combos with pre-set values
+        return False
+
+
 class CheckBox(Control):
     def read(self):
         return bool(self.browserControl.value)
@@ -210,6 +221,7 @@ CTRL_MAPPING = {
     "password": Password,
     "select": Combo,
     "checkbox": CheckBox,
+    "hidden": HiddenControl,
 }
 
 
