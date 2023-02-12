@@ -267,9 +267,13 @@ class Processor:
                     changed = True
                     LOG.info(f"{row.control} changed from {prev} to {row.value}")
                     if control.needPost():
-                        LOG.info(f"{row.control} needs form submission")
-                        form.submit()
-                        form = browser.getForm()
+                        if self.dryRun:
+                            LOG.info(f"{row.control} needs form submission (dryrun) "
+                                     "this is going to BREAK")
+                        else:
+                            LOG.info(f"{row.control} needs form submission")
+                            form.submit()
+                            form = browser.getForm()
             if changed:
                 if self.dryRun:
                     LOG.info(f"{pageUrl} form NOT submitted (dryrun)")
