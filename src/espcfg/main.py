@@ -48,6 +48,7 @@ def readWebTable(url):
     tbody = soup.find("table").find("tbody")
 
     table = []
+    maxRowLen = 0
     for table_row in tbody.findAll("tr"):
         columns = table_row.findAll("td")
         row = []
@@ -55,6 +56,8 @@ def readWebTable(url):
             row.append(column.text)
         if row:
             table.append(row)
+            maxRowLen = max(maxRowLen, len(row))
+    LOG.info(f"Loaded a table of {len(table)} rows {maxRowLen} columns")
     return table
 
 
@@ -62,6 +65,8 @@ def readCSV(fname):
     with open(fname, "r") as csv_file:
         csv_reader = csv.reader(csv_file)
         table = [row for row in csv_reader]
+    maxRowLen = max([len(row) for row in table])
+    LOG.info(f"Loaded a table of {len(table)} rows {maxRowLen} columns")
     return table
 
 
@@ -75,6 +80,7 @@ def readIslands(table):
             if cell == ISLAND_CORNER:
                 island = loadIsland(table, ridx, cidx)
                 islands.append(island)
+    LOG.info(f"Loaded {len(islands)} islands")
     return islands
 
 
