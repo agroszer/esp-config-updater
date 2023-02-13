@@ -276,13 +276,13 @@ class Processor:
             form = browser.getForm()
             changed = False
             for row in rows:
+                if row.control == 'submit?':
+                    if changed:
+                        form = self._submitForm(pageUrl, form)
+                        changed = False
+                    continue
                 if row.control == 'submit':
-                    if self.dryRun:
-                        LOG.info(f"submit: {pageUrl} form NOT submitted (dryrun)")
-                    else:
-                        LOG.info(f"submit: {pageUrl} form submitted")
-                        form.submit()
-                        form = browser.getForm()
+                    form = self._submitForm(pageUrl, form)
                     continue
 
                 browserControl = form.getControl(name=row.control)
@@ -294,21 +294,29 @@ class Processor:
                     changed = True
                     LOG.info(f"{row.control} changed from {prev} to {row.value}")
                     if control.needPost():
+                        msg = f"{row.control} needs form submission"
                         if self.dryRun:
-                            LOG.info(f"{row.control} needs form submission (dryrun) "
-                                     "this is going to BREAK")
-                        else:
-                            LOG.info(f"{row.control} needs form submission")
-                            form.submit()
-                            form = browser.getForm()
+                            msg = f"{msg} this is going to BREAK"
+                        form = self._submitForm(pageUrl, form, msg)
             if changed:
-                if self.dryRun:
-                    LOG.info(f"{pageUrl} form NOT submitted (dryrun)")
-                else:
-                    LOG.info(f"{pageUrl} form submitted")
-                    form.submit()
+                form = self._submitForm(pageUrl, form)
             else:
                 LOG.info(f"{pageUrl} no changes")
+
+    def _submitForm(self, pageUrl, form, msg=None):
+        if msg is None:
+            msg = f"{pageUrl} form"
+        if self.dryRun:
+            LOG.info(f"{msg} NOT submitted (dryrun)")
+        else:
+            form.submit()
+            LOG.info(f"{msg} submitted")
+            if "resetFlashWriteCounter" in form.browser.contents.decode('utf8'):
+                # FS : Daily flash write rate exceeded! (powercycle or send command 'resetFlashWriteCounter' to reset this)
+                # so sad, form gets cleared
+                LOG.error("Daily flash write count exceeded!")
+            form = form.browser.getForm()
+        return form
 
     def precheck(self, islands):
         units = set()
