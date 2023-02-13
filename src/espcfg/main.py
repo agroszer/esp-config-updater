@@ -101,7 +101,7 @@ def loadIsland(table, ridx, cidx):
     urls = defaultdict(list)
     while True:
         row = getIslandRow(table, ridx + roffset, cidx, previous=prevRow)
-        if not row.control or not row.value or row.url == ISLAND_CORNER:
+        if not row.control or row.url == ISLAND_CORNER:
             # an empty row or the next island header is the bottom of the island
             break
 
@@ -270,6 +270,15 @@ class Processor:
             form = browser.getForm()
             changed = False
             for row in rows:
+                if row.control == 'submit':
+                    if self.dryRun:
+                        LOG.info(f"submit: {pageUrl} form NOT submitted (dryrun)")
+                    else:
+                        LOG.info(f"submit: {pageUrl} form submitted")
+                        form.submit()
+                        form = browser.getForm()
+                    continue
+
                 browserControl = form.getControl(name=row.control)
                 controlClass = CTRL_MAPPING[browserControl.type]
                 control = controlClass(browserControl, form)
