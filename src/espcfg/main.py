@@ -285,7 +285,10 @@ class Processor:
                     form = self._submitForm(pageUrl, form)
                     continue
 
-                browserControl = form.getControl(name=row.control)
+                try:
+                    browserControl = form.getControl(name=row.control)
+                except NotImplementedError:
+                    LOG.error(f"Control {row.control} not found")
                 controlClass = CTRL_MAPPING[browserControl.type]
                 control = controlClass(browserControl, form)
                 if control.changed(row.value):
