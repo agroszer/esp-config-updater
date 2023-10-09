@@ -241,12 +241,14 @@ class Processor:
         self.failFast = failFast
         self.name2ip = {}
 
-    def process(self, data):
+    def process(self, data, host=None):
         for island in data:
-            self.processIsland(island)
+            self.processIsland(island, host)
 
-    def processIsland(self, island):
+    def processIsland(self, island, host=None):
         for unit in island.units:
+            if host is not None and unit!=host:
+                continue
             self.processUnit(unit, island)
 
     def processUnit(self, unit, island):
@@ -285,7 +287,6 @@ class Processor:
                     form = self._submitForm(pageUrl, form)
                     continue
                 if row.control.startswith('!'):
-
                     # click a button
                     forgiving = False
                     name = row.control[1:]
@@ -348,10 +349,12 @@ class Processor:
             form = form.browser.getForm()
         return form
 
-    def precheck(self, islands):
+    def precheck(self, islands, host=None):
         units = set()
         for island in islands:
             for unit in island.units:
+                if host is not None and unit!=host:
+                    continue
                 units.add(unit)
 
         failed = []
@@ -395,7 +398,8 @@ class Processor:
     is_flag=True,
     help="Connect all mentioned units before updating",
 )
-def config(source, quiet, verbose, dryrun, failfast, precheck):
+@click.option("--host", "-h", default=None, help="Process only the given host")
+def config(source, quiet, verbose, dryrun, failfast, precheck, host):
     os.chdir(HOME)
 
     level = logging.INFO
@@ -419,8 +423,8 @@ def config(source, quiet, verbose, dryrun, failfast, precheck):
     p = Processor(dryRun=dryrun, failFast=failfast)
     p.loadUnits()
     if precheck:
-        p.precheck(islands)
-    p.process(islands)
+        p.precheck(islands, host)
+    p.process(islands, host)
 
 
 class Discovery:

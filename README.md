@@ -13,6 +13,8 @@ Something like saltstack or terraform for ESPEasy.
 See a sample here:
 https://docs.google.com/spreadsheets/d/1UqaxLiMUxmWf_blkbo-72ey-zTr3ZrWkMyTSZqjRu7g/edit?usp=sharing
 
+Note, dry run will probably break when a form needs submission to have the right fields.
+
 ## How to install
 
 - Clone the repo
@@ -29,6 +31,7 @@ Usage: main [OPTIONS] SOURCE
 Options:
   -q, --quiet
   -v, --verbose
+  -h, --host      Process only the given host
   -d, --dryrun    Make no changes
   -f, --failfast  Fail/exit on first failure, otherwise move on the next unit
   -p, --precheck  Connect all mentioned units before updating
