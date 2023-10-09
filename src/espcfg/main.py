@@ -53,7 +53,11 @@ def readWebTable(url):
         columns = table_row.findAll("td")
         row = []
         for column in columns:
-            row.append(column.text)
+            text = column.text
+            # convert \r \n in the input to real linefeed and newline
+            text = text.replace(r"\r", "\r")
+            text = text.replace(r"\n", "\n")
+            row.append(text)
         if row:
             table.append(row)
             maxRowLen = max(maxRowLen, len(row))
