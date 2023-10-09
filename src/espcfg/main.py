@@ -276,13 +276,39 @@ class Processor:
             form = browser.getForm()
             changed = False
             for row in rows:
-                if row.control == 'submit?':
+                if row.control == '!submit?':
                     if changed:
                         form = self._submitForm(pageUrl, form)
                         changed = False
                     continue
-                if row.control == 'submit':
+                if row.control == '!submit':
                     form = self._submitForm(pageUrl, form)
+                    continue
+                if row.control.startswith('!'):
+
+                    # click a button
+                    forgiving = False
+                    name = row.control[1:]
+                    if name.endswith('?'):
+                        # don't fail if  the button is not available
+                        name = name[:-1]
+                        forgiving = True
+                    try:
+                        browserControl = form.getControl(name=name)
+                    except LookupError:
+                        if forgiving:
+                            continue
+                        else:
+                            raise
+
+                    msg = f"Clicking {name}"
+                    if self.dryRun:
+                        msg = f"{msg} this is going to BREAK"
+                        LOG.info(msg)
+                        continue
+                    LOG.info(msg)
+                    browserControl.click()
+                    form = form.browser.getForm()
                     continue
 
                 try:
@@ -317,6 +343,7 @@ class Processor:
             if "resetFlashWriteCounter" in form.browser.contents.decode('utf8'):
                 # FS : Daily flash write rate exceeded! (powercycle or send command 'resetFlashWriteCounter' to reset this)
                 # so sad, form gets cleared
+                # <div class="alert"><span class="closebtn" onclick="this.parentElement.style.display='none';">x</span>FS   : Daily flash write rate exceeded! (powercycle or send command 'resetFlashWriteCounter' to reset this)</div>
                 LOG.error("Daily flash write count exceeded!")
             form = form.browser.getForm()
         return form
